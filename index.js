@@ -2,6 +2,8 @@ var postcss = require('postcss');
 var fs = require('fs');
 var path = require('path');
 var chalk = require('chalk');
+var mkdirp = require('mkdirp');
+var helpers = require('./lib/helpers');
 
 var defaults = {
     maxSelectors: 4000,
@@ -22,31 +24,44 @@ var options;
  *
  * @param {Node} startingNode
  * @param {Node} destination
+ * @param {boolean} [removeCurrentNode=false]
  * @returns {Root}
  */
-var moveNodesStartingFrom = function (startingNode, destination) {
-    if (!startingNode.parent) {
-        return destination;
-    }
+var moveNodesStartingFrom =
+    function (startingNode, destination, removeCurrentNode) {
+        if (!startingNode.parent) { // root-node
+            return destination;
+        }
 
-    var startingNodeParent = startingNode.parent;
-    var parent = startingNodeParent.clone({ nodes: [] });
-    var nextNode = startingNode.next();
+        var startingNodeParent = startingNode.parent;
+        var parent = startingNodeParent.clone({ nodes: [] });
+        var nextNode = startingNode.next();
 
-    if (destination) {
-        destination.moveTo(parent);
-    } else {
-        startingNode.moveTo(parent);
-    }
+        if (destination) {
+            destination.moveTo(parent);
+        } else {
+            startingNode.moveTo(parent);
+        }
 
-    while (nextNode) {
-        var currentNode = nextNode;
-        nextNode = nextNode.next();
-        currentNode.moveTo(parent);
-    }
+        removeCurrentNode && startingNode.remove();
 
-    return moveNodesStartingFrom(startingNodeParent, parent);
-};
+        while (nextNode) {
+            var currentNode = nextNode;
+            nextNode = nextNode.next();
+
+            if (currentNode.type === 'atrule' && !currentNode.nodes.length) {
+                continue;
+            }
+
+            currentNode.moveTo(parent);
+        }
+
+        return moveNodesStartingFrom(
+            startingNodeParent,
+            parent,
+            startingNodeParent.nodes.length === 0
+        );
+    };
 
 /**
  * Walking by css nodes and if passed selectors count are below
@@ -103,6 +118,32 @@ var log = function (msg/* ...args */) {
     console.log.apply(this, args);
 };
 
+/**
+ * fs.writeFile which returns Promise
+ *
+ * @param {string} [dest] destination path
+ * @param {string} [src] contents of the file
+ * @parm {boolean} [mkDir=false] recursive make dir to dest
+ * @returns {Promise}
+ */
+var writePromise = function (dest, src, mkDir) {
+    return new Promise(function (res, rej) {
+        var writeFileHandler = function () {
+            fs.writeFile(dest, src, function (err) {
+                err ? rej(err) : res();
+            });
+        };
+
+        if (mkDir) {
+            mkdirp(path.dirname(dest), function (errMkdir) {
+                errMkdir ? rej(errMkdir) : writeFileHandler();
+            });
+        } else {
+            writeFileHandler();
+        }
+    });
+};
+
 
 /**
  * Export plugin
@@ -111,15 +152,16 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
     opts = opts || {};
 
     // merging default settings
-    for (var key in defaults) {
-        if (typeof opts[key] === 'undefined') {
-            opts[key] = defaults[key];
-        }
-    }
+    helpers.extend(opts, defaults);
 
     options = opts;
 
     return function (css, result) {
+        var processor = postcss().use(result.processor);
+        processor.plugins = processor.plugins.filter(function (plugin) {
+            return plugin.postcssPlugin !== 'postcss-split';
+        });
+
         roots = [];
         selectors = 0;
 
@@ -127,51 +169,43 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
 
         result.root = css;
 
-        // for that old node
+        // for that old node.js
         var destination = result.opts.to ?
             (path.parse ? path.parse : require('path-parse'))(result.opts.to) :
             null;
 
         var filesForWrite = [];
+        var rootsProcessing = [];
 
-        roots = roots.reverse().map(function (root, index) {
+        roots.forEach(function (root, index) {
             var fileName = getFileName(destination, index);
 
-            var file = root.toResult(!fileName ? undefined : {
-                to: fileName,
-                map: {
-                    sourcesContent: false,
-                    inline: false,
-                    prev: true
-                }
-            });
+            rootsProcessing.push(
+                processor.process(root, { to: fileName }).then(
+                    function (rootResult) {
+                        roots[index] = rootResult;
 
-            if (options.writeImport && fileName) {
-                var importNode = postcss.atRule({
-                    name: 'import',
-                    params: 'url(' + path.basename(fileName) + ')'
-                });
-                css.prepend(importNode);
-            }
+                        if (!result.opts.to) return;
 
-            if (!options.writeFiles) return file;
+                        filesForWrite.push(
+                            writePromise(
+                                rootResult.opts.to, rootResult.css, true
+                            )
+                        );
 
-            filesForWrite.push({
-                dest: file.opts.to,
-                src: file.css
-            });
+                        if (options.writeSourceMaps && rootResult.map) {
+                            filesForWrite.push(
+                                writePromise(
+                                    rootResult.opts.to + '.map',
+                                    rootResult.map.toString(),
+                                    true
+                                )
+                            );
+                        }
+                    })
+            );
 
-            if (options.writeSourceMaps && file.map) {
-                filesForWrite.push({
-                    dest: fileName + '.map',
-                    src: file.map.toString()
-                });
-            }
-
-            return file;
-        });
-
-        result.roots = roots;
+        }, this);
 
         if (roots.length) {
             log('Divided into %s style files %s',
@@ -181,25 +215,35 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
         } else {
             log('Found %s selectors, skipping %s',
                 selectors,
-                result.opts.to ? 'from ' + result.opts.to : ''
+                result.opts.to || ''
             );
         }
 
-        if (options.writeFiles && !result.opts.to) {
-            return result.warn(
-                'Destination is not provided, ' +
-                'splitted css files would not be written'
-            );
-        }
+        return new Promise(function (pluginDone, pluginFailed) {
+            Promise.all(rootsProcessing).then(function () {
 
-        filesForWrite = filesForWrite.map(function (file) {
-            return new Promise(function (resolve, reject) {
-                fs.writeFile(file.dest, file.src, function (err) {
-                    err ? reject(err) : resolve();
-                });
+                result.roots = roots;
+
+                if (options.writeImport) {
+                    for (var i = roots.length - 1; i >= 0; i--) {
+                        var importNode = postcss.atRule({
+                            name: 'import',
+                            params: 'url(' + path.basename(roots[i].opts.to) + ')'
+                        });
+                        css.prepend(importNode);
+                    }
+                }
+
+                if (options.writeFiles && !result.opts.to) {
+                    result.warn(
+                        'Destination is not provided, ' +
+                        'splitted css files would not be written'
+                    );
+                    return pluginDone();
+                }
+
+                Promise.all(filesForWrite).then(pluginDone).catch(pluginFailed);
             });
         });
-
-        return Promise.all(filesForWrite);
     };
 });
