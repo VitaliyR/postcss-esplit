@@ -1,6 +1,6 @@
 {
   "name": "postcss-split",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "PostCSS plugin for splitting css into multiple css files with sourcemaps support for preventing limitation of shinny ie9",
   "keywords": [
     "postcss",
@@ -19,6 +19,7 @@
   "homepage": "https://github.com/vitaliyr/postcss-split",
   "dependencies": {
     "chalk": "^1.1.1",
+    "mkdirp": "^0.5.1",
     "path-parse": "^1.0.5",
     "postcss": "^5.0.2"
   },

@@ -7,14 +7,45 @@
 [ci]:      https://travis-ci.org/VitaliyR/postcss-split
 
 ```css
-.foo {
-    /* Input example */
+/* Input example - style.css */
+
+.someClass {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    p {
+        color: red;
+    }
+
+    em {
+        color: blue;
+    }
 }
 ```
 
 ```css
-.foo {
-  /* Output example */
+/* Output example with maxSelectors = 2 */
+
+/* style.css */
+@import url(style-0.css);
+
+.someClass {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    p {
+        color: red;
+    }
+}
+
+
+/* style-0.css */
+@media (max-width: 768px) {
+    em {
+        color: blue;
+    }
 }
 ```
 
@@ -27,7 +58,7 @@ postcss([ require('postcss-split')(/*opts*/) ])
 See [PostCSS] docs for examples for your environment.
 
 ## Options
-* `maxSelectors` *{number=4000}* count of selectors exceeding which css file should be separated
+* `maxSelectors`    *{number=4000}* count of selectors exceeding which css file should be separated
 * `fileName` *{string=%original%-%i%}* template for retrieving name of separated files
     * `%original%` *{string}* name of original file
     * `%i%` *{number}* index of separated file
