@@ -1,10 +1,10 @@
-# PostCSS Split [![Build Status][ci-img]][ci]
+# PostCSS eSplit [![Build Status][ci-img]][ci]
 
 [PostCSS] plugin for splitting css into multiple css files with sourcemaps support for preventing limitation of shinny ie9.
 
 [PostCSS]: https://github.com/postcss/postcss
-[ci-img]:  https://travis-ci.org/VitaliyR/postcss-split.svg
-[ci]:      https://travis-ci.org/VitaliyR/postcss-split
+[ci-img]:  https://travis-ci.org/VitaliyR/postcss-esplit.svg
+[ci]:      https://travis-ci.org/VitaliyR/postcss-esplit
 
 ```css
 /* Input example - style.css */
