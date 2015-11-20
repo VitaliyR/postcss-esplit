@@ -1,6 +1,6 @@
 {
   "name": "postcss-esplit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "PostCSS plugin for splitting css into multiple css files with sourcemaps support for preventing limitation of shinny ie9",
   "keywords": [
     "postcss",
