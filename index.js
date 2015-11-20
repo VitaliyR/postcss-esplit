@@ -17,6 +17,7 @@ var defaults = {
 var roots;
 var selectors;
 var options;
+var messages;
 
 /**
  * Moving nodes and siblings to cloned parent node.
@@ -34,7 +35,11 @@ var moveNodesStartingFrom =
         }
 
         var startingNodeParent = startingNode.parent;
-        var parent = startingNodeParent.clone({ nodes: [] });
+        var parent = startingNodeParent.clone({
+            nodes: [],
+            raws: startingNodeParent.raws
+        });
+
         var nextNode = startingNode.next();
 
         if (destination) {
@@ -47,6 +52,8 @@ var moveNodesStartingFrom =
 
         while (nextNode) {
             var currentNode = nextNode;
+            var currentNodeRaws = helpers.extend({}, nextNode.raws);
+
             nextNode = nextNode.next();
 
             if (currentNode.type === 'atrule' && !currentNode.nodes.length) {
@@ -54,6 +61,7 @@ var moveNodesStartingFrom =
             }
 
             currentNode.moveTo(parent);
+            currentNode.raws = currentNodeRaws;
         }
 
         return moveNodesStartingFrom(
@@ -103,17 +111,27 @@ var getFileName = function (destination, index) {
 };
 
 /**
- * Log message to console with >>
- * Arguments are passed to console.log function
+ * Log message to PostCSS
+ * Arguments are used for filling template
  *
  * @param {string} msg
  */
 var log = function (msg/* ...args */) {
+    Array.prototype.slice.call(arguments, 1, arguments.length).forEach(function (data) {
+        msg = msg.replace(/%s/, data);
+    }, this);
+
+    messages.push({
+        type: 'info',
+        plugin: 'postcss-esplit',
+        text: msg
+    });
+
     if (options.quiet) return;
 
     var args = [
-        chalk.green('>>') + ' ' + msg
-    ].concat(Array.prototype.slice.call(arguments, 1, arguments.length));
+        chalk.green('>>') + ' postcss-esplit: ' + msg
+    ];
 
     console.log.apply(this, args);
 };
@@ -144,6 +162,48 @@ var writePromise = function (dest, src, mkDir) {
     });
 };
 
+var processRoot = function (processor, root, index, destination, result) {
+    return new Promise(function (resolve, reject) {
+        var filesForWrite = [];
+        var fileName = getFileName(destination, index);
+
+        processor.process(root, { from: result.opts.from, to: fileName }).then(
+            function (rootResult) {
+
+                if (!rootResult.opts.to) {
+                    if (options.writeFiles) {
+                        result.warn(
+                            'Destination is not provided, ' +
+                            'splitted css files would not be written'
+                        );
+                    }
+
+                    return resolve(rootResult);
+                }
+
+                filesForWrite.push(
+                    writePromise(
+                        rootResult.opts.to, rootResult.css, true
+                    )
+                );
+
+                if (options.writeSourceMaps && rootResult.map) {
+                    filesForWrite.push(
+                        writePromise(
+                            rootResult.opts.to + '.map',
+                            rootResult.map.toString(),
+                            true
+                        )
+                    );
+                }
+
+                Promise.all(filesForWrite).then(function () {
+                    resolve(rootResult);
+                }).catch(reject);
+            }).catch(reject);
+    });
+};
+
 
 /**
  * Export plugin
@@ -152,15 +212,33 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
     opts = opts || {};
 
     // merging default settings
-    helpers.extend(opts, defaults);
+    helpers.defaults(opts, defaults);
 
     options = opts;
 
+
     return function (css, result) {
-        var processor = postcss().use(result.processor);
-        processor.plugins = processor.plugins.filter(function (plugin) {
-            return plugin.postcssPlugin !== 'postcss-split';
+        messages = [];
+
+        // preventing multiple instances in current processor
+        var pluginMatch;
+
+        result.processor.plugins = result.processor.plugins.filter(function (plugin) {
+            var splitPlugin = plugin.postcssPlugin === 'postcss-split';
+
+            if (splitPlugin && !pluginMatch) {
+                pluginMatch = true;
+                return true;
+            }
+
+            return !splitPlugin;
         });
+
+        // processing other roots only with processors which are not already processed source
+        var processor = postcss().use(result.processor);
+        processor.plugins = processor.plugins.slice(
+            processor.plugins.indexOf(result.lastPlugin) + 1
+        );
 
         roots = [];
         selectors = 0;
@@ -174,37 +252,12 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
             (path.parse ? path.parse : require('path-parse'))(result.opts.to) :
             null;
 
-        var filesForWrite = [];
         var rootsProcessing = [];
 
         roots.forEach(function (root, index) {
-            var fileName = getFileName(destination, index);
-
             rootsProcessing.push(
-                processor.process(root, { to: fileName }).then(
-                    function (rootResult) {
-                        roots[index] = rootResult;
-
-                        if (!result.opts.to) return;
-
-                        filesForWrite.push(
-                            writePromise(
-                                rootResult.opts.to, rootResult.css, true
-                            )
-                        );
-
-                        if (options.writeSourceMaps && rootResult.map) {
-                            filesForWrite.push(
-                                writePromise(
-                                    rootResult.opts.to + '.map',
-                                    rootResult.map.toString(),
-                                    true
-                                )
-                            );
-                        }
-                    })
+                processRoot(processor, root, index, destination, result)
             );
-
         }, this);
 
         if (roots.length) {
@@ -220,30 +273,24 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
         }
 
         return new Promise(function (pluginDone, pluginFailed) {
-            Promise.all(rootsProcessing).then(function () {
+            Promise.all(rootsProcessing).then(function (processedRoots) {
 
-                result.roots = roots;
+                result.roots = processedRoots;
 
-                if (options.writeImport) {
-                    for (var i = roots.length - 1; i >= 0; i--) {
+                if (options.writeImport && processedRoots.length) {
+                    for (var i = processedRoots.length - 1; i >= 0; i--) {
                         var importNode = postcss.atRule({
                             name: 'import',
-                            params: 'url(' + path.basename(roots[i].opts.to) + ')'
+                            params: 'url(' + path.basename(processedRoots[i].opts.to) + ')'
                         });
                         css.prepend(importNode);
                     }
                 }
 
-                if (options.writeFiles && !result.opts.to) {
-                    result.warn(
-                        'Destination is not provided, ' +
-                        'splitted css files would not be written'
-                    );
-                    return pluginDone();
-                }
+                result.messages = result.messages.concat(messages);
+                pluginDone();
 
-                Promise.all(filesForWrite).then(pluginDone).catch(pluginFailed);
-            });
+            }).catch(pluginFailed);
         });
     };
 });

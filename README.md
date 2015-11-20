@@ -49,6 +49,11 @@
 }
 ```
 
+## Install
+```
+npm install postcss-esplit --save
+```
+
 ## Usage
 
 ```js
@@ -56,6 +61,10 @@ postcss([ require('postcss-split')(/*opts*/) ])
 ```
 
 See [PostCSS] docs for examples for your environment.
+
+Also, starting from version 0.0.2 there are no need to place the plugin in the end of the
+processor plugins list.
+
 
 ## Options
 * `maxSelectors`    *{number=4000}* count of selectors exceeding which css file should be separated
