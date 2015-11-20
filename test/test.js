@@ -60,11 +60,11 @@ var test = function (input, output, splittedFiles, opts, done) {
 
 describe('helpers', function () {
 
-    it('Extend should extend objects', function (done) {
+    it('Defaults should extend objects', function (done) {
         var a = {};
         var b = { param: true };
 
-        var c = helpers.extend(a, b);
+        var c = helpers.defaults(a, b);
 
         expect(c).to.eql(a);
         expect(c.param).to.eql(b.param);
@@ -72,13 +72,50 @@ describe('helpers', function () {
         done();
     });
 
-    it('Extend should not rewrite already defined parameters in source', function (done) {
+    it('Defaults should not rewrite already defined parameters in source', function (done) {
         var a = { param: true };
         var b = { param: false };
 
-        var c = helpers.extend(a, b);
+        var c = helpers.defaults(a, b);
 
         expect(c.param).to.eql(true);
+
+        done();
+    });
+
+    it('Extend should extend objects for first argument', function (done) {
+        var a = {};
+        var b = {};
+        var c = { something: false };
+
+        var d = helpers.extend(a, b, c);
+
+        expect(d).to.eql(a);
+        expect(d).to.not.eql(b);
+
+        done();
+    });
+
+    it('Extend should not deeply extend objects', function (done) {
+        var a = {};
+        var b = {
+            something: {
+                test: true
+            }
+        };
+
+        helpers.extend(a, b);
+
+        expect(a.something).to.be.eql(b.something);
+
+        helpers.extend(a, {
+            something: {
+                another: false
+            }
+        });
+
+        expect(a.something.test).to.eql(undefined);
+        expect(a.something.another).to.eql(false);
 
         done();
     });
