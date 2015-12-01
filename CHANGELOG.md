@@ -1,3 +1,7 @@
+## [0.0.3] - 2015-01-01
+* Removed IDE garbage from npm repository
+* Fixed bug with passing source map options to children roots
+
 ## [0.0.2] - 2015-11-20
 * [#3](https://github.com/VitaliyR/postcss-esplit/pull/3) Fixed scope bugs when processing a lot of files
 * Fixed reprocessing performance by handling which plugins already finished process and which aren't

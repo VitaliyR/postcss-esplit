@@ -167,7 +167,11 @@ var processRoot = function (processor, root, index, destination, result) {
         var filesForWrite = [];
         var fileName = getFileName(destination, index);
 
-        processor.process(root, { from: result.opts.from, to: fileName }).then(
+        processor.process(root, {
+            from: result.opts.from,
+            to: fileName,
+            map: result.opts.map
+        }).then(
             function (rootResult) {
 
                 if (!rootResult.opts.to) {

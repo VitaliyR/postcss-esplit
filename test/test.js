@@ -127,6 +127,23 @@ describe('helpers', function () {
 
 describe('postcss-split', function () {
 
+    it('Find plugin duplicates and remove them from processor list', function (done) {
+        var opts = {
+            writeFiles: false,
+            maxSelectors: 1
+        };
+        var input = 'a{}b{}c{}';
+
+        postcss([ plugin(opts), plugin(opts), plugin(opts) ]).process(input, { to: testPath })
+            .then(function (result) {
+                expect(result.warnings()).to.be.empty;
+                expect(result.processor.plugins.length).to.eql(1);
+                expect(result.roots[0].processor.plugins.length).to.eql(0);
+                expect(result.roots[1].processor.plugins.length).to.eql(0);
+                done();
+            }).catch(done);
+    });
+
     it('There are no splitted files even if writeFiles is true', function (done) {
         var source = 'a{}';
 
