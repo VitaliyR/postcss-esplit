@@ -7,3 +7,5 @@ test/
 .travis.yml
 
 gulpfile.js
+
+.idea
