@@ -145,8 +145,8 @@ describe('postcss-split', function () {
     });
 
     it('Correct plugins for children roots processor', function (done) {
-        var tempPlugin = postcss.plugin('postcss-temp', function (opts) {
-            return function () {}
+        var tempPlugin = postcss.plugin('postcss-temp', function () {
+            return function () {};
         });
 
         var opts = {
