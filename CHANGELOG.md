@@ -1,4 +1,4 @@
-## [0.0.3] - 2015-01-01
+## [0.0.3] - 2015-01-02
 * Removed IDE garbage from npm repository
 * Fixed bug with passing source map options to children roots
 

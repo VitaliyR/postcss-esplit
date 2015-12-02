@@ -144,6 +144,32 @@ describe('postcss-split', function () {
             }).catch(done);
     });
 
+    it('Correct plugins for children roots processor', function (done) {
+        var tempPlugin = postcss.plugin('postcss-temp', function (opts) {
+            return function () {}
+        });
+
+        var opts = {
+            writeFiles: false,
+            maxSelectors: 1
+        };
+        var input = 'a{}b{}c{}';
+
+        postcss([
+            tempPlugin(),
+            plugin(opts),
+            plugin(opts),
+            tempPlugin()
+        ]).process(input, { to: testPath })
+            .then(function (result) {
+                expect(result.warnings()).to.be.empty;
+                expect(result.processor.plugins.length).to.eql(3);
+                expect(result.roots[0].processor.plugins.length).to.eql(1);
+                expect(result.roots[1].processor.plugins.length).to.eql(1);
+                done();
+            }).catch(done);
+    });
+
     it('There are no splitted files even if writeFiles is true', function (done) {
         var source = 'a{}';
 
