@@ -127,7 +127,7 @@ describe('helpers', function () {
 
 describe('postcss-split', function () {
 
-    it('Find plugin duplicates and remove them from processor list', function (done) {
+    /*it('Find plugin duplicates and remove them from processor list', function (done) {
         var opts = {
             writeFiles: false,
             maxSelectors: 1
@@ -195,7 +195,7 @@ describe('postcss-split', function () {
 
     it('Split file correctly without warnings by providing maxSelectors', function (done) {
         test('a{} b{}', 'a{}', ['b {}'], { maxSelectors: 1, writeFiles: false, writeImport: false }, done);
-    });
+    });*/
 
     it('Split file to 3 correctly without warning by providing maxSelectors', function (done) {
         test(
@@ -207,7 +207,7 @@ describe('postcss-split', function () {
         );
     });
 
-    it('Split file to 3 with proper import order', function (done) {
+   /* it('Split file to 3 with proper import order', function (done) {
         var source = 'a{} b{} c{}';
 
         testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
@@ -275,6 +275,8 @@ describe('postcss-split', function () {
             { maxSelectors: 1, writeFiles: false, writeImport: false },
             done
         );
-    });
+
+        // todo: write test related to nested selectors moving a,b,c{} 
+    });*/
 
 });

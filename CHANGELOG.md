@@ -1,3 +1,7 @@
+## [0.0.4] - 2016-05-13
+* Fixed bug with wrong import order
+* Improved selectors separation by splitting nested selectors
+
 ## [0.0.3] - 2015-01-02
 * Removed IDE garbage from npm repository
 * Fixed bug with passing source map options to children roots

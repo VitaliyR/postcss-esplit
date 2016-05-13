@@ -24,12 +24,13 @@ var messages;
  * Recursive until root.
  *
  * @param {Node} startingNode
- * @param {Node} destination
+ * @param {Node} endNode
+ * @param {Node} [destination=]
  * @param {boolean} [removeCurrentNode=false]
  * @returns {Root}
  */
-var moveNodesStartingFrom =
-    function (startingNode, destination, removeCurrentNode) {
+var moveNodes =
+    function (startingNode, endNode, destination, removeCurrentNode) {
         if (!startingNode.parent) { // root-node
             return destination;
         }
@@ -50,7 +51,15 @@ var moveNodesStartingFrom =
 
         removeCurrentNode && startingNode.remove();
 
+        if (startingNode === endNode) {
+            return parent;
+        }
+
         while (nextNode) {
+            if (nextNode === endNode) {
+                return parent;
+            }
+
             var currentNode = nextNode;
             var currentNodeRaws = helpers.extend({}, nextNode.raws);
 
@@ -64,12 +73,23 @@ var moveNodesStartingFrom =
             currentNode.raws = currentNodeRaws;
         }
 
-        return moveNodesStartingFrom(
+        return moveNodes(
             startingNodeParent,
+            endNode,
             parent,
             startingNodeParent.nodes.length === 0
         );
     };
+
+var splitRule = function (node, position) {
+    if (!position) return;
+
+    var newNode = node.clone({
+        selectors: node.selectors.splice(position)
+    });
+    // node.selectors.splice(position);
+    node.parent.insertAfter(node, newNode);
+};
 
 /**
  * Walking by css nodes and if passed selectors count are below
@@ -78,18 +98,25 @@ var moveNodesStartingFrom =
  * @param {Root} css
  */
 var processTree = function (css) {
+    var startingNode, prevNode;
+
     css.walk(function (node) {
         if (!node.selectors) return true;
 
+        !startingNode && (startingNode = node);
+
         if ((selectors += node.selectors.length) > options.maxSelectors) {
-            var newFile = moveNodesStartingFrom(node);
+            var selInSource = node.selectors.length - (selectors - options.maxSelectors);
+            splitRule(node, selInSource);
+
+            var newFile = moveNodes(startingNode, node);
             roots.push(newFile);
 
             selectors = 0;
-            processTree(newFile);
-
-            return false;
+            startingNode = null;
         }
+
+        prevNode = node;
     });
 };
 
