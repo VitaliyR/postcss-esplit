@@ -22,8 +22,8 @@ var messages;
 
 /**
  * Moves rules from start to, including, end nodes from root to new postcss.root
- * @param {Rule} startNode
- * @param {Rule} endNode
+ * @param {Node} startNode
+ * @param {Node} endNode
  * @param {Root} root
  * @returns {Root}
  */
@@ -34,7 +34,8 @@ var moveNodes = function (startNode, endNode, root) {
         [root, newRoot]
     ];
 
-    root.walkRules(function (node) {
+    root.walk(function (node) {
+        if (node.type === 'atrule' && node.nodes && node.nodes.length) return true;
         if (node === startNode) foundStart = true;
 
         if (foundStart) {
@@ -61,9 +62,11 @@ var moveNodes = function (startNode, endNode, root) {
                 newRoot.append(copyParent);
             }
 
+            // move node, remove its parents if it was the only one node here
             var nodeParents = helpers.parents(node);
 
-            node.moveTo(newParent); // todo try to clone before/after etc?
+            node.remove();
+            newParent.append(node);
 
             nodeParents.forEach(function (parent) {
                 !parent.nodes.length && parent.remove();
@@ -107,7 +110,8 @@ var splitRule = function (node, position) {
 var processTree = function (css) {
     var startingNode, endNode, prevNode;
 
-    css.walkRules(function (node) {
+    css.walk(function (node) {
+        if (!node.selector) return true;
         !startingNode && (startingNode = node);
 
         if ((selectors += node.selectors.length) > options.maxSelectors) {

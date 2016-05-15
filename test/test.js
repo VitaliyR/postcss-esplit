@@ -286,8 +286,8 @@ describe(pkg.name, function () {
             expect(path.basename(result.roots[0].opts.to)).to.eql(importNode);
             expect(path.basename(result.roots[1].opts.to)).to.eql(importNode2);
 
-            expect(result.roots[0].css).to.eql('a {}');
-            expect(result.roots[1].css).to.eql('b {}');
+            expect(result.roots[0].css).to.eql('a{}');
+            expect(result.roots[1].css).to.eql('b{}');
         }, {
             to: testPath
         });
@@ -352,6 +352,44 @@ describe(pkg.name, function () {
                 'b{}'
             ],
             { maxSelectors: 1, writeFiles: false, writeImport: false },
+            done
+        );
+    });
+
+    it('Split file correctly with few selectors in rule with data', function (done) {
+        test(
+            'a,b,c { font-weight: bold; color: red }',
+            'c { font-weight: bold; color: red }',
+            [
+                'a{ font-weight: bold; color: red }',
+                'b{ font-weight: bold; color: red }'
+            ],
+            { maxSelectors: 1, writeFiles: false, writeImport: false },
+            done
+        );
+    });
+
+    it('Should split correctly with moving @font-face', function (done) {
+        test(
+            'a{} @font-face { font-family:proxima_nova_rgregular; src:url(font.eot); } b{} c{}',
+            'c {}',
+            [
+                'a{} @font-face { font-family:proxima_nova_rgregular; src:url(font.eot); } b{}'
+            ],
+            { maxSelectors: 2, writeFiles: false, writeImport: false },
+            done
+        );
+    });
+
+    it('Should split correctly with moving @font-face and splitting big selector', function (done) {
+        test(
+            'a,b{} c{} @font-face { font-family:proxima_nova_rgregular; src:url(font.eot); } d,e{} f{}',
+            'e{} f{}',
+            [
+                'a,b{}',
+                'c{} @font-face { font-family:proxima_nova_rgregular; src:url(font.eot); } d{}'
+            ],
+            { maxSelectors: 2, writeFiles: false, writeImport: false },
             done
         );
     });
