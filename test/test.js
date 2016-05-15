@@ -5,6 +5,7 @@ var chai = require('chai');
 var expect = chai.expect;
 var AssertionError = chai.AssertionError;
 var path = require('path');
+var pkg = require('../package.json');
 
 var plugin = require('../');
 var helpers = require('../lib/helpers');
@@ -15,6 +16,7 @@ var helpers = require('../lib/helpers');
  * @type {string}
  */
 var testPath = 'test/output/test.css';
+var testDir = 'test/output';
 
 
 /* TEST METHODS */
@@ -120,21 +122,82 @@ describe('helpers', function () {
         done();
     });
 
+    it('getFileName should return proper filename', function (done) {
+        var destination = path.parse(testPath);
+        var fileName;
+
+        fileName = helpers.getFileName('test', destination, 0);
+        expect(fileName).to.be.eql(testPath);
+
+        fileName = helpers.getFileName('test-%i%', destination, 11);
+        expect(fileName).to.be.eql(testDir + '/test-11.css');
+
+        fileName = helpers.getFileName('%original%test%i%', destination, 1);
+        expect(fileName).to.be.eql(testDir + '/testtest1.css');
+
+        done();
+    });
+
+    it('find should find object in array', function (done) {
+        var obj00 = { iam: '00' };
+        var obj01 = { iam: '01' };
+        var obj10 = { iam: '10' };
+        var obj11 = { iam: '11' };
+        var obj20 = { iam: '20' };
+        var obj21 = { iam: '21' };
+        var arr = [
+            [obj00, obj01],
+            [obj10, obj11],
+            [obj20, obj21]
+        ];
+        var obj;
+
+        obj = helpers.find(obj20, arr);
+        expect(obj).to.be.eql(obj21);
+
+        obj = helpers.find(obj10, arr);
+        expect(obj).to.be.eql(obj11);
+
+        obj = helpers.find(obj21, arr);
+        expect(obj).to.be.not.ok;
+
+        done();
+    });
+
+    it('parents should return all parents', function (done) {
+        var root = postcss.root();
+        var node = postcss.parse('@media (max-heigth: 10px){ a{} @media (max-width: 10px) { b{} } }');
+        root.append(node);
+        var parents;
+
+        parents = helpers.parents(root);
+        expect(parents).to.have.length(0);
+
+        parents = helpers.parents(root.nodes[0]);
+        expect(parents).to.have.length(0);
+
+        parents = helpers.parents(root.nodes[0].nodes[1].nodes[0]);
+        expect(parents).to.have.length(2);
+        expect(parents[1]).to.be.eql(root.nodes[0]);
+
+        done();
+    });
+
 });
 
 
 /* PLUGIN TESTS */
 
-describe('postcss-split', function () {
+describe(pkg.name, function () {
 
-    /*it('Find plugin duplicates and remove them from processor list', function (done) {
+    it('Find plugin duplicates and remove them from processor list', function (done) {
         var opts = {
             writeFiles: false,
             maxSelectors: 1
         };
         var input = 'a{}b{}c{}';
 
-        postcss([ plugin(opts), plugin(opts), plugin(opts) ]).process(input, { to: testPath })
+        postcss([plugin(opts), plugin(opts), plugin(opts)]).process(input, { to: testPath })
             .then(function (result) {
                 expect(result.warnings()).to.be.empty;
                 expect(result.processor.plugins.length).to.eql(1);
@@ -146,7 +209,8 @@ describe('postcss-split', function () {
 
     it('Correct plugins for children roots processor', function (done) {
         var tempPlugin = postcss.plugin('postcss-temp', function () {
-            return function () {};
+            return function () {
+            };
         });
 
         var opts = {
@@ -194,20 +258,20 @@ describe('postcss-split', function () {
     });
 
     it('Split file correctly without warnings by providing maxSelectors', function (done) {
-        test('a{} b{}', 'a{}', ['b {}'], { maxSelectors: 1, writeFiles: false, writeImport: false }, done);
-    });*/
+        test('a{} b{}', 'b{}', ['a {}'], { maxSelectors: 1, writeFiles: false, writeImport: false }, done);
+    });
 
     it('Split file to 3 correctly without warning by providing maxSelectors', function (done) {
         test(
             'a{} b{} c{}',
-            'a{}',
-            ['b {}', 'c {}'],
+            'c{}',
+            ['a {}', 'b {}'],
             { maxSelectors: 1, writeFiles: false, writeImport: false },
             done
         );
     });
 
-   /* it('Split file to 3 with proper import order', function (done) {
+    it('Split file to 3 with proper import order', function (done) {
         var source = 'a{} b{} c{}';
 
         testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
@@ -222,8 +286,8 @@ describe('postcss-split', function () {
             expect(path.basename(result.roots[0].opts.to)).to.eql(importNode);
             expect(path.basename(result.roots[1].opts.to)).to.eql(importNode2);
 
-            expect(result.roots[0].css).to.eql('b {}');
-            expect(result.roots[1].css).to.eql('c {}');
+            expect(result.roots[0].css).to.eql('a {}');
+            expect(result.roots[1].css).to.eql('b {}');
         }, {
             to: testPath
         });
@@ -232,8 +296,10 @@ describe('postcss-split', function () {
     it('Split file correctly with media queries', function (done) {
         test(
             'a{} @media (max-width: 0px) { a{} b{} } c {}',
-            'a{} @media (max-width: 0px) { a{} }',
-            ['@media (max-width: 0px) { b {} } c {}'],
+            '@media (max-width: 0px) { b{} } c {}',
+            [
+                'a{} @media (max-width: 0px) { a {} }'
+            ],
             { maxSelectors: 2, writeFiles: false, writeImport: false },
             done
         );
@@ -242,9 +308,9 @@ describe('postcss-split', function () {
     it('Split file with empty media queries', function (done) {
         test(
             '@media (max-width: 0px) { a{} b{} }',
-            '@media (max-width: 0px) { a{} }',
+            '@media (max-width: 0px) { b{} }',
             [
-                '@media (max-width: 0px) { b{} }'
+                '@media (max-width: 0px) { a{} }'
             ],
             { maxSelectors: 1, writeFiles: false, writeImport: false },
             done
@@ -254,10 +320,10 @@ describe('postcss-split', function () {
     it('Split file with nested atrules', function (done) {
         test(
             '@media (max-width: 0px) { a{} @media (height: 0px) { b {} } c{} }',
-            '@media (max-width: 0px) { a{} }',
+            '@media (max-width: 0px) { c{} }',
             [
-                '@media (max-width: 0px) { @media (height: 0px) { b{} } }',
-                '@media (max-width: 0px) { c{} }'
+                '@media (max-width: 0px) { a{} }',
+                '@media (max-width: 0px) { @media (height: 0px) { b{} } }'
             ],
             { maxSelectors: 1, writeFiles: false, writeImport: false },
             done
@@ -267,16 +333,27 @@ describe('postcss-split', function () {
     it('Split file correctly with nested (wrong) media queries', function (done) {
         test(
             '@media (max-width: 0px) { a{} @media (max-height: 0px) { b {} } } c {}',
-            '@media (max-width: 0px) { a{} }',
+            'c {}',
             [
-                '@media (max-width: 0px) {@media (max-height: 0px) { b{} }}',
-                'c {}'
+                '@media (max-width: 0px) { a{} }',
+                '@media (max-width: 0px) { @media (max-height: 0px) { b{} } }'
             ],
             { maxSelectors: 1, writeFiles: false, writeImport: false },
             done
         );
+    });
 
-        // todo: write test related to nested selectors moving a,b,c{} 
-    });*/
+    it('Split file correctly with few selectors in rule', function (done) {
+        test(
+            'a,b,c {}',
+            'c {}',
+            [
+                'a{}',
+                'b{}'
+            ],
+            { maxSelectors: 1, writeFiles: false, writeImport: false },
+            done
+        );
+    });
 
 });

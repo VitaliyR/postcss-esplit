@@ -4,6 +4,7 @@ var path = require('path');
 var chalk = require('chalk');
 var mkdirp = require('mkdirp');
 var helpers = require('./lib/helpers');
+var pkg = require('./package.json');
 
 var defaults = {
     maxSelectors: 4000,
@@ -20,75 +21,81 @@ var options;
 var messages;
 
 /**
- * Moving nodes and siblings to cloned parent node.
- * Recursive until root.
- *
- * @param {Node} startingNode
- * @param {Node} endNode
- * @param {Node} [destination=]
- * @param {boolean} [removeCurrentNode=false]
+ * Moves rules from start to, including, end nodes from root to new postcss.root
+ * @param {Rule} startNode
+ * @param {Rule} endNode
+ * @param {Root} root
  * @returns {Root}
  */
-var moveNodes =
-    function (startingNode, endNode, destination, removeCurrentNode) {
-        if (!startingNode.parent) { // root-node
-            return destination;
-        }
+var moveNodes = function (startNode, endNode, root) {
+    var newRoot = postcss.root();
+    var foundStart;
+    var parentsRelations = [
+        [root, newRoot]
+    ];
 
-        var startingNodeParent = startingNode.parent;
-        var parent = startingNodeParent.clone({
-            nodes: [],
-            raws: startingNodeParent.raws
-        });
+    root.walkRules(function (node) {
+        if (node === startNode) foundStart = true;
 
-        var nextNode = startingNode.next();
+        if (foundStart) {
+            var newParent = helpers.find(node.parent, parentsRelations);
+            if (!newParent) {
+                var nodeParent = node.parent;
+                var copyParent, prevCopyParent;
 
-        if (destination) {
-            destination.moveTo(parent);
-        } else {
-            startingNode.moveTo(parent);
-        }
+                // copy parents
+                while (nodeParent.type !== 'root') {
+                    copyParent = nodeParent.clone({
+                        nodes: [],
+                        raws: nodeParent.raws
+                    });
+                    parentsRelations.push([nodeParent, copyParent]);
 
-        removeCurrentNode && startingNode.remove();
+                    prevCopyParent && copyParent.append(prevCopyParent);
+                    !newParent && (newParent = copyParent);
 
-        if (startingNode === endNode) {
-            return parent;
-        }
+                    prevCopyParent = copyParent;
+                    nodeParent = nodeParent.parent;
+                }
 
-        while (nextNode) {
-            if (nextNode === endNode) {
-                return parent;
+                newRoot.append(copyParent);
             }
 
-            var currentNode = nextNode;
-            var currentNodeRaws = helpers.extend({}, nextNode.raws);
+            var nodeParents = helpers.parents(node);
 
-            nextNode = nextNode.next();
+            node.moveTo(newParent); // todo try to clone before/after etc?
 
-            if (currentNode.type === 'atrule' && !currentNode.nodes.length) {
-                continue;
-            }
-
-            currentNode.moveTo(parent);
-            currentNode.raws = currentNodeRaws;
+            nodeParents.forEach(function (parent) {
+                !parent.nodes.length && parent.remove();
+            });
         }
 
-        return moveNodes(
-            startingNodeParent,
-            endNode,
-            parent,
-            startingNodeParent.nodes.length === 0
-        );
-    };
+        if (node === endNode) {
+            return false;
+        }
+    });
 
+    return newRoot;
+};
+
+/**
+ * Splits rule selectors by provided position
+ *
+ * @param {Rule} node
+ * @param {Number} position
+ * @returns {undefined|Rule}
+ */
 var splitRule = function (node, position) {
-    if (!position) return;
+    if (!position) return null;
 
     var newNode = node.clone({
-        selectors: node.selectors.splice(position)
+        selector: node.selectors.slice(position).join(',')
     });
-    // node.selectors.splice(position);
+    node.selector = node.selectors.slice(0, position).join(',');
+
     node.parent.insertAfter(node, newNode);
+
+    return node;
 };
 
 /**
@@ -98,43 +105,26 @@ var splitRule = function (node, position) {
  * @param {Root} css
  */
 var processTree = function (css) {
-    var startingNode, prevNode;
+    var startingNode, endNode, prevNode;
 
-    css.walk(function (node) {
-        if (!node.selectors) return true;
-
+    css.walkRules(function (node) {
         !startingNode && (startingNode = node);
 
         if ((selectors += node.selectors.length) > options.maxSelectors) {
             var selInSource = node.selectors.length - (selectors - options.maxSelectors);
-            splitRule(node, selInSource);
+            endNode = splitRule(node, selInSource) || prevNode;
 
-            var newFile = moveNodes(startingNode, node);
+            var newFile = moveNodes(startingNode, endNode, css);
             roots.push(newFile);
 
             selectors = 0;
-            startingNode = null;
+            processTree(css);
+
+            return false;
         }
 
         prevNode = node;
     });
-};
-
-/**
- * Retreive filename for style by filling template from options
- *
- * @param {Object} destination
- * @param {number} index
- * @returns {string|null}
- */
-var getFileName = function (destination, index) {
-    if (!destination) return null;
-
-    var fileName = options.fileName
-        .replace(/%i%/gm, index)
-        .replace(/%original%/gm, destination.name);
-
-    return destination.dir + path.sep + fileName + destination.ext;
 };
 
 /**
@@ -150,14 +140,14 @@ var log = function (msg/* ...args */) {
 
     messages.push({
         type: 'info',
-        plugin: 'postcss-esplit',
+        plugin: pkg.name,
         text: msg
     });
 
     if (options.quiet) return;
 
     var args = [
-        chalk.green('>>') + ' postcss-esplit: ' + msg
+        chalk.green('>>') + ' ' + pkg.name + ': ' + msg
     ];
 
     console.log.apply(this, args);
@@ -192,7 +182,7 @@ var writePromise = function (dest, src, mkDir) {
 var processRoot = function (processor, root, index, destination, result) {
     return new Promise(function (resolve, reject) {
         var filesForWrite = [];
-        var fileName = getFileName(destination, index);
+        var fileName = helpers.getFileName(options.fileName, destination, index);
 
         processor.process(root, {
             from: result.opts.from,
@@ -239,14 +229,13 @@ var processRoot = function (processor, root, index, destination, result) {
 /**
  * Export plugin
  */
-module.exports = postcss.plugin('postcss-split', function (opts) {
+module.exports = postcss.plugin(pkg.name, function (opts) {
     opts = opts || {};
 
     // merging default settings
     helpers.defaults(opts, defaults);
 
     options = opts;
-
 
     return function (css, result) {
         messages = [];
@@ -255,7 +244,7 @@ module.exports = postcss.plugin('postcss-split', function (opts) {
         var pluginMatch;
 
         result.processor.plugins = result.processor.plugins.filter(function (plugin) {
-            var splitPlugin = plugin.postcssPlugin === 'postcss-split';
+            var splitPlugin = plugin.postcssPlugin === pkg.name;
 
             if (splitPlugin && !pluginMatch) {
                 pluginMatch = true;

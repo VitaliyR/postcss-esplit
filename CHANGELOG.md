@@ -1,6 +1,7 @@
-## [0.0.4] - 2016-05-13
+## [0.0.4] - 2016-05-16
 * Fixed bug with wrong import order
 * Improved selectors separation by splitting nested selectors
+* Refactor node moves methods
 
 ## [0.0.3] - 2015-01-02
 * Removed IDE garbage from npm repository
