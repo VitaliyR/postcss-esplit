@@ -2,6 +2,7 @@
 * Fixed bug with wrong import order
 * Improved selectors separation by splitting nested selectors
 * Refactor node moves methods
+* Added counter for selectors count for splitted files
 
 ## [0.0.3] - 2015-01-02
 * Removed IDE garbage from npm repository

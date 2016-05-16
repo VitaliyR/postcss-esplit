@@ -16,6 +16,7 @@ var defaults = {
 };
 
 var roots;
+var treeSelectors;
 var selectors;
 var options;
 var messages;
@@ -35,7 +36,8 @@ var moveNodes = function (startNode, endNode, root) {
     ];
 
     root.walk(function (node) {
-        if (node.type === 'atrule' && node.nodes && node.nodes.length) return true;
+        if (node.type !== 'decl' && node.type !== 'rule') return true;
+        if (node.type === 'decl' && node.parent.type !== 'atrule') return true;
         if (node === startNode) foundStart = true;
 
         if (foundStart) {
@@ -114,17 +116,21 @@ var processTree = function (css) {
         if (!node.selector) return true;
         !startingNode && (startingNode = node);
 
-        if ((selectors += node.selectors.length) > options.maxSelectors) {
-            var selInSource = node.selectors.length - (selectors - options.maxSelectors);
+        if ((treeSelectors += node.selectors.length) > options.maxSelectors) {
+            var selInSource = node.selectors.length - (treeSelectors - options.maxSelectors);
             endNode = splitRule(node, selInSource) || prevNode;
+
+            selectors += selInSource ? endNode.selectors.length : 0;
 
             var newFile = moveNodes(startingNode, endNode, css);
             roots.push(newFile);
 
-            selectors = 0;
+            treeSelectors = 0;
             processTree(css);
 
             return false;
+        } else {
+            selectors += node.selectors.length;
         }
 
         prevNode = node;
@@ -265,7 +271,7 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
         );
 
         roots = [];
-        selectors = 0;
+        treeSelectors = selectors = 0;
 
         processTree(css);
 
@@ -285,9 +291,10 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
         }, this);
 
         if (roots.length) {
-            log('Divided into %s style files %s',
+            log('Divided into %s style files %s (Found %s selectors)',
                 roots.length,
-                result.opts.to ? 'from ' + result.opts.to : ''
+                result.opts.to ? 'from ' + result.opts.to : '',
+                selectors
             );
         } else {
             log('Found %s selectors, skipping %s',
