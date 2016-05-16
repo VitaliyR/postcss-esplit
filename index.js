@@ -310,11 +310,18 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
 
                 if (options.writeImport && processedRoots.length) {
                     for (var i = processedRoots.length - 1; i >= 0; i--) {
-                        var importNode = postcss.atRule({
-                            name: 'import',
-                            params: 'url(' + path.basename(processedRoots[i].opts.to) + ')'
-                        });
-                        css.prepend(importNode);
+                        if (processedRoots[i].opts.to) {
+                            var importNode = postcss.atRule({
+                                name: 'import',
+                                params: 'url(' + path.basename(processedRoots[i].opts.to) + ')'
+                            });
+                            css.prepend(importNode);
+                        } else {
+                            result.warn(
+                                'Destination is not provided, ' +
+                                '@import directive will be not written'
+                            );
+                        }
                     }
                 }
 
