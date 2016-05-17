@@ -3,7 +3,7 @@
 [PostCSS] plugin for splitting css into multiple css files with sourcemaps support for preventing limitation of shinny ie9.
 
 [PostCSS]: https://github.com/postcss/postcss
-[ci-img]:  https://travis-ci.org/VitaliyR/postcss-esplit.svg
+[ci-img]:  https://travis-ci.org/VitaliyR/postcss-esplit.svg?branch=master
 [ci]:      https://travis-ci.org/VitaliyR/postcss-esplit
 
 ```css
