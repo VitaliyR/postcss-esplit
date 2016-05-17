@@ -60,7 +60,7 @@ npm install postcss-esplit --save
 ## Usage
 
 ```js
-postcss([ require('postcss-split')(/*opts*/) ])
+postcss([ require('postcss-esplit')(/*opts*/) ])
 ```
 
 See [PostCSS] docs for examples for your environment.
