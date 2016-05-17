@@ -29,7 +29,7 @@ var messages;
  * @returns {Root}
  */
 var moveNodes = function (startNode, endNode, root) {
-    var newRoot = postcss.root();
+    var newRoot = postcss.root(root.raws);
     var foundStart;
     var parentsRelations = [
         [root, newRoot]

@@ -487,4 +487,18 @@ describe(pkg.name, function () {
         });
     });
 
+    it('New roots should copy raws from original root', function (done) {
+        var source = 'a { color:red; } b {color: white }\n';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false, writeImport: false }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(1);
+
+            expect(result.css).to.eql('b {color: white }\n');
+            expect(result.roots[0].css).to.eql('a { color:red; }\n');
+        }, {
+            to: testPath
+        });
+    });
+
 });
