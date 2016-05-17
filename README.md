@@ -8,6 +8,7 @@
 
 ```css
 /* Input example - style.css */
+@charset "UTF-8";
 
 .someClass {
     display: block;
@@ -28,8 +29,17 @@
 /* Output example with maxSelectors = 2 */
 
 /* style.css */
+@charset "UTF-8";
 @import url(style-0.css);
 
+@media (max-width: 768px) {
+    em {
+        color: blue;
+    }
+}
+
+
+/* style-0.css */
 .someClass {
     display: block;
 }
@@ -40,13 +50,6 @@
     }
 }
 
-
-/* style-0.css */
-@media (max-width: 768px) {
-    em {
-        color: blue;
-    }
-}
 ```
 
 ## Install
@@ -75,9 +78,3 @@ processor plugins list.
 * `writeSourceMaps` *{boolean=true}* source maps of separated files should be written to the disk
 * `writeImport` *{boolean=true}* original css source should have import declaration for separated files
 * `quiet` *{boolean-false}* toggling console output
-
-## TODO
-* Check if atRules are affecting selectors count
-* Play with source maps settings
-* Separate functions to lib
-* Write more tests to cover the functions from the lib
