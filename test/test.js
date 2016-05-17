@@ -63,9 +63,11 @@ var test = function (input, output, splittedFiles, opts, done) {
 };
 
 var clearTestDir = function () {
-    fs.readdirSync(testDir).forEach(function (file) {
-        fs.unlink(testDir + path.sep + file);
-    });
+    if (fs.existsSync(testDir)) {
+        fs.readdirSync(testDir).forEach(function (file) {
+            fs.unlink(testDir + path.sep + file);
+        });
+    }
 };
 
 
@@ -263,7 +265,9 @@ describe(pkg.name, function () {
             expect(result.warnings()).to.have.length(1);
             expect(result.roots).to.have.length(2);
 
-            expect(fs.readdirSync(testDir)).to.have.length(0);
+            if (fs.existsSync(testDir)) {
+                expect(fs.readdirSync(testDir)).to.have.length(0);
+            }
         });
     });
 
