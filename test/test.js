@@ -2,6 +2,7 @@
 
 var postcss = require('postcss');
 var chai = require('chai');
+var fs = require('fs');
 var expect = chai.expect;
 var AssertionError = chai.AssertionError;
 var path = require('path');
@@ -20,6 +21,11 @@ var testDir = 'test/output';
 
 
 /* TEST METHODS */
+
+var spaceRegexp = / |\n/gmi;
+var clearCss = function (css) {
+    return css.replace(spaceRegexp, '');
+};
 
 var testOwnSuite = function (input, opts, done, cb, processOpts) {
     return postcss([plugin(opts)]).process(input, processOpts).then(function (result) {
@@ -40,21 +46,26 @@ var testOwnSuite = function (input, opts, done, cb, processOpts) {
 
 var test = function (input, output, splittedFiles, opts, done) {
     var args = [input, opts, done];
-    var spaceRegexp = / |\n/gmi;
 
     args.push(function (result) {
-        expect(result.css.replace(spaceRegexp, '')).to.eql(output.replace(spaceRegexp, ''));
+        expect(clearCss(result.css)).to.eql(clearCss(output));
         expect(result.warnings()).to.be.empty;
 
         if (splittedFiles.length) {
             expect(result.roots.length).to.be.eql(splittedFiles.length);
             result.roots.forEach(function (root, index) {
-                expect(root.css.replace(spaceRegexp, '')).to.eql(splittedFiles[index].replace(spaceRegexp, ''));
+                expect(clearCss(root.css)).to.eql(clearCss(splittedFiles[index]));
             });
         }
     });
 
     testOwnSuite.apply(this, args);
+};
+
+var clearTestDir = function () {
+    fs.readdirSync(testDir).forEach(function (file) {
+        fs.unlink(testDir + path.sep + file);
+    });
 };
 
 
@@ -244,6 +255,18 @@ describe(pkg.name, function () {
         });
     });
 
+    it('Not write files if writeFiles is false', function (done) {
+        var source = 'a{}b{}c{}';
+
+        clearTestDir();
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+            expect(result.warnings()).to.have.length(1);
+            expect(result.roots).to.have.length(2);
+
+            expect(fs.readdirSync(testDir)).to.have.length(0);
+        });
+    });
+
     it('Fail if there are splitted files and writeFiles is true but opts.to is empty', function (done) {
         var source = 'a{} b{}';
 
@@ -272,9 +295,9 @@ describe(pkg.name, function () {
     });
 
     it('Split file to 3 with proper import order', function (done) {
-        var source = 'a{} b{} c{}';
+        var source = 'x{} y{} z{}';
 
-        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: true }, done, function (result) {
             expect(result.warnings()).to.be.empty;
             expect(result.roots.length).to.eql(2);
 
@@ -286,8 +309,12 @@ describe(pkg.name, function () {
             expect(path.basename(result.roots[0].opts.to)).to.eql(importNode);
             expect(path.basename(result.roots[1].opts.to)).to.eql(importNode2);
 
-            expect(result.roots[0].css).to.eql('a{}');
-            expect(result.roots[1].css).to.eql('b{}');
+            expect(result.roots[0].css).to.eql('x{}');
+            expect(result.roots[1].css).to.eql('y{}');
+
+            expect(fs.readdirSync(testDir)).to.have.length(2);
+            expect(fs.readFileSync(testDir + path.sep + 'test-0.css', 'utf-8')).to.eql('x{}');
+            expect(fs.readFileSync(testDir + path.sep + 'test-1.css', 'utf-8')).to.eql('y{}');
         }, {
             to: testPath
         });
@@ -392,6 +419,68 @@ describe(pkg.name, function () {
             { maxSelectors: 2, writeFiles: false, writeImport: false },
             done
         );
+    });
+
+    it('Should insert imports after the @charset if any', function (done) {
+        var source = '@charset "UTF-8";a{}b{}';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(1);
+
+            expect(clearCss(result.css)).to.eql(clearCss('@charset "UTF-8";@import url(test-0.css);b{}'));
+            expect(result.roots[0].css).to.eql('a{}');
+        }, {
+            to: testPath
+        });
+    });
+
+    it('Should insert imports after the first @charset if there are lot of them', function (done) {
+        var source = 'a{}b{}@charset "UTF-8";c{}@charset "KOI8-R";d{}';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(3);
+
+            expect(result.css).to.eql('@charset "UTF-8";@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);@charset "KOI8-R";d{}');
+            expect(result.roots[0].css).to.eql('a{}');
+            expect(result.roots[1].css).to.eql('b{}');
+            expect(result.roots[2].css).to.eql('c{}');
+        }, {
+            to: testPath
+        });
+    });
+
+    it('Should insert imports in the beginning of the css if no charset is provided', function (done) {
+        var source = 'a{}b{}c{}d{}';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(3);
+
+            expect(clearCss(result.css)).to.eql(clearCss('@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}'));
+            expect(result.roots[0].css).to.eql('a{}');
+            expect(result.roots[1].css).to.eql('b{}');
+            expect(result.roots[2].css).to.eql('c{}');
+        }, {
+            to: testPath
+        });
+    });
+
+    it('Should move charset to the beginning of the css if it is located in the deep of css', function (done) {
+        var source = 'a{}b{}c{}d{}@charset "UTF-8";';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(3);
+
+            expect(clearCss(result.css)).to.eql(clearCss('@charset "UTF-8";@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}'));
+            expect(result.roots[0].css).to.eql('a{}');
+            expect(result.roots[1].css).to.eql('b{}');
+            expect(result.roots[2].css).to.eql('c{}');
+        }, {
+            to: testPath
+        });
     });
 
 });

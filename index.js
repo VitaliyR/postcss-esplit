@@ -212,6 +212,8 @@ var processRoot = function (processor, root, index, destination, result) {
                     return resolve(rootResult);
                 }
 
+                if (!options.writeFiles) return resolve(rootResult);
+
                 filesForWrite.push(
                     writePromise(
                         rootResult.opts.to, rootResult.css, true
@@ -309,19 +311,41 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
                 result.roots = processedRoots;
 
                 if (options.writeImport && processedRoots.length) {
+                    // find charset node
+                    var charsetRule;
+                    css.walkAtRules('charset', function (rule) {
+                        if (!charsetRule) {
+                            charsetRule = rule;
+                            return false;
+                        }
+                    });
+
+                    if (charsetRule) {
+                        charsetRule.remove();
+                        css.prepend(charsetRule);
+                    }
+
+                    var destinationError;
+
                     for (var i = processedRoots.length - 1; i >= 0; i--) {
                         if (processedRoots[i].opts.to) {
                             var importNode = postcss.atRule({
                                 name: 'import',
                                 params: 'url(' + path.basename(processedRoots[i].opts.to) + ')'
                             });
-                            css.prepend(importNode);
+                            charsetRule ?
+                                css.insertAfter(charsetRule, importNode) :
+                                css.prepend(importNode);
                         } else {
-                            result.warn(
-                                'Destination is not provided, ' +
-                                '@import directive will be not written'
-                            );
+                            destinationError = true;
                         }
+                    }
+
+                    if (destinationError) {
+                        result.warn(
+                            'Destination is not provided, ' +
+                            '@import directive will be not written'
+                        );
                     }
                 }
 

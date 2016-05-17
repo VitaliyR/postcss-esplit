@@ -1,3 +1,6 @@
+## [0.0.5] - 2016-05-16
+* Fixed insert of import nodes before @charset declaration
+
 ## [0.0.4] - 2016-05-16
 * Fixed bug with wrong import order
 * Improved selectors separation by splitting nested selectors
