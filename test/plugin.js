@@ -1,251 +1,24 @@
 /* eslint max-len: [2, 160] */
 
-var postcss = require('postcss');
 var chai = require('chai');
-var fs = require('fs');
 var expect = chai.expect;
-var AssertionError = chai.AssertionError;
+
+var fs = require('fs');
 var path = require('path');
 var pkg = require('../package.json');
 
-var plugin = require('../');
-var helpers = require('../lib/helpers');
+var testHelpers = require('./test_helpers');
+
+var test = testHelpers.test;
+var testOwnSuite = testHelpers.testOwnSuite;
 
 /**
  * For temporary outputting css files
  * @const
  * @type {string}
  */
-var testPath = 'test/output/test.css';
-var testDir = 'test/output';
-
-
-/* TEST METHODS */
-
-var spaceRegexp = / |\n/gmi;
-var clearCss = function (css) {
-    return css.replace(spaceRegexp, '');
-};
-
-var testOwnSuite = function (input, opts, done, cb, processOpts) {
-    return postcss([plugin(opts)]).process(input, processOpts).then(function (result) {
-        try {
-            cb(result);
-            done();
-        } catch (e) {
-            done(e);
-        }
-    }).catch(function (error) {
-        done(
-            error.actual instanceof Array ?
-                new AssertionError(error.actual[0].text, {}) :
-                error
-        );
-    });
-};
-
-var test = function (input, output, splittedFiles, opts, done) {
-    var args = [input, opts, done];
-
-    args.push(function (result) {
-        expect(clearCss(result.css)).to.eql(clearCss(output));
-        expect(result.warnings()).to.be.empty;
-
-        if (splittedFiles.length) {
-            expect(result.roots.length).to.be.eql(splittedFiles.length);
-            result.roots.forEach(function (root, index) {
-                expect(clearCss(root.css)).to.eql(clearCss(splittedFiles[index]));
-            });
-        }
-    });
-
-    testOwnSuite.apply(this, args);
-};
-
-var clearTestDir = function () {
-    if (fs.existsSync(testDir)) {
-        fs.readdirSync(testDir).forEach(function (file) {
-            fs.unlink(testDir + path.sep + file);
-        });
-    }
-};
-
-
-/* LIB TESTS */
-
-describe('helpers', function () {
-
-    it('Defaults should extend objects', function (done) {
-        var a = {};
-        var b = { param: true };
-
-        var c = helpers.defaults(a, b);
-
-        expect(c).to.eql(a);
-        expect(c.param).to.eql(b.param);
-
-        done();
-    });
-
-    it('Defaults should not rewrite already defined parameters in source', function (done) {
-        var a = { param: true };
-        var b = { param: false };
-
-        var c = helpers.defaults(a, b);
-
-        expect(c.param).to.eql(true);
-
-        done();
-    });
-
-    it('Extend should extend objects for first argument', function (done) {
-        var a = {};
-        var b = {};
-        var c = { something: false };
-
-        var d = helpers.extend(a, b, c);
-
-        expect(d).to.eql(a);
-        expect(d).to.not.eql(b);
-
-        done();
-    });
-
-    it('Extend should not deeply extend objects', function (done) {
-        var a = {};
-        var b = {
-            something: {
-                test: true
-            }
-        };
-
-        helpers.extend(a, b);
-
-        expect(a.something).to.be.eql(b.something);
-
-        helpers.extend(a, {
-            something: {
-                another: false
-            }
-        });
-
-        expect(a.something.test).to.eql(undefined);
-        expect(a.something.another).to.eql(false);
-
-        done();
-    });
-
-    it('getFileName should return proper filename', function (done) {
-        var destination = path.parse(testPath);
-        var fileName;
-
-        fileName = helpers.getFileName('test', destination, 0);
-        expect(fileName).to.be.eql(testPath);
-
-        fileName = helpers.getFileName('test-%i%', destination, 11);
-        expect(fileName).to.be.eql(testDir + '/test-11.css');
-
-        fileName = helpers.getFileName('%original%test%i%', destination, 1);
-        expect(fileName).to.be.eql(testDir + '/testtest1.css');
-
-        done();
-    });
-
-    it('find should find object in array', function (done) {
-        var obj00 = { iam: '00' };
-        var obj01 = { iam: '01' };
-        var obj10 = { iam: '10' };
-        var obj11 = { iam: '11' };
-        var obj20 = { iam: '20' };
-        var obj21 = { iam: '21' };
-        var arr = [
-            [obj00, obj01],
-            [obj10, obj11],
-            [obj20, obj21]
-        ];
-        var obj;
-
-        obj = helpers.find(obj20, arr);
-        expect(obj).to.be.eql(obj21);
-
-        obj = helpers.find(obj10, arr);
-        expect(obj).to.be.eql(obj11);
-
-        obj = helpers.find(obj21, arr);
-        expect(obj).to.be.not.ok;
-
-        done();
-    });
-
-    it('parents should return all parents', function (done) {
-        var root = postcss.root();
-        var node = postcss.parse('@media (max-heigth: 10px){ a{} @media (max-width: 10px) { b{} } }');
-        root.append(node);
-        var parents;
-
-        parents = helpers.parents(root);
-        expect(parents).to.have.length(0);
-
-        parents = helpers.parents(root.nodes[0]);
-        expect(parents).to.have.length(0);
-
-        parents = helpers.parents(root.nodes[0].nodes[1].nodes[0]);
-        expect(parents).to.have.length(2);
-        expect(parents[1]).to.be.eql(root.nodes[0]);
-
-        done();
-    });
-
-});
-
-
-/* PLUGIN TESTS */
 
 describe(pkg.name, function () {
-
-    it('Find plugin duplicates and remove them from processor list', function (done) {
-        var opts = {
-            writeFiles: false,
-            maxSelectors: 1
-        };
-        var input = 'a{}b{}c{}';
-
-        postcss([plugin(opts), plugin(opts), plugin(opts)]).process(input, { to: testPath })
-            .then(function (result) {
-                expect(result.warnings()).to.be.empty;
-                expect(result.processor.plugins.length).to.eql(1);
-                expect(result.roots[0].processor.plugins.length).to.eql(0);
-                expect(result.roots[1].processor.plugins.length).to.eql(0);
-                done();
-            }).catch(done);
-    });
-
-    it('Correct plugins for children roots processor', function (done) {
-        var tempPlugin = postcss.plugin('postcss-temp', function () {
-            return function () {
-            };
-        });
-
-        var opts = {
-            writeFiles: false,
-            maxSelectors: 1
-        };
-        var input = 'a{}b{}c{}';
-
-        postcss([
-            tempPlugin(),
-            plugin(opts),
-            plugin(opts),
-            tempPlugin()
-        ]).process(input, { to: testPath })
-            .then(function (result) {
-                expect(result.warnings()).to.be.empty;
-                expect(result.processor.plugins.length).to.eql(3);
-                expect(result.roots[0].processor.plugins.length).to.eql(1);
-                expect(result.roots[1].processor.plugins.length).to.eql(1);
-                done();
-            }).catch(done);
-    });
 
     it('There are no splitted files even if writeFiles is true', function (done) {
         var source = 'a{}';
@@ -260,13 +33,13 @@ describe(pkg.name, function () {
     it('Not write files if writeFiles is false', function (done) {
         var source = 'a{}b{}c{}';
 
-        clearTestDir();
+        testHelpers.clearTestDir();
         testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
             expect(result.warnings()).to.have.length(1);
             expect(result.roots).to.have.length(2);
 
-            if (fs.existsSync(testDir)) {
-                expect(fs.readdirSync(testDir)).to.have.length(0);
+            if (fs.existsSync(testHelpers.testDir)) {
+                expect(fs.readdirSync(testHelpers.testDir)).to.have.length(0);
             }
         });
     });
@@ -316,11 +89,11 @@ describe(pkg.name, function () {
             expect(result.roots[0].css).to.eql('x{}');
             expect(result.roots[1].css).to.eql('y{}');
 
-            expect(fs.readdirSync(testDir)).to.have.length(2);
-            expect(fs.readFileSync(testDir + path.sep + 'test-0.css', 'utf-8')).to.eql('x{}');
-            expect(fs.readFileSync(testDir + path.sep + 'test-1.css', 'utf-8')).to.eql('y{}');
+            expect(fs.readdirSync(testHelpers.testDir)).to.have.length(2);
+            expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-0.css', 'utf-8')).to.eql('x{}');
+            expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-1.css', 'utf-8')).to.eql('y{}');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 
@@ -432,10 +205,10 @@ describe(pkg.name, function () {
             expect(result.warnings()).to.be.empty;
             expect(result.roots.length).to.eql(1);
 
-            expect(clearCss(result.css)).to.eql(clearCss('@charset "UTF-8";@import url(test-0.css);b{}'));
+            expect(testHelpers.clearCss(result.css)).to.eql(testHelpers.clearCss('@charset "UTF-8";@import url(test-0.css);b{}'));
             expect(result.roots[0].css).to.eql('a{}');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 
@@ -451,7 +224,7 @@ describe(pkg.name, function () {
             expect(result.roots[1].css).to.eql('b{}');
             expect(result.roots[2].css).to.eql('c{}');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 
@@ -462,12 +235,14 @@ describe(pkg.name, function () {
             expect(result.warnings()).to.be.empty;
             expect(result.roots.length).to.eql(3);
 
-            expect(clearCss(result.css)).to.eql(clearCss('@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}'));
+            expect(testHelpers.clearCss(result.css)).to.eql(
+                testHelpers.clearCss('@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}')
+            );
             expect(result.roots[0].css).to.eql('a{}');
             expect(result.roots[1].css).to.eql('b{}');
             expect(result.roots[2].css).to.eql('c{}');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 
@@ -478,12 +253,16 @@ describe(pkg.name, function () {
             expect(result.warnings()).to.be.empty;
             expect(result.roots.length).to.eql(3);
 
-            expect(clearCss(result.css)).to.eql(clearCss('@charset "UTF-8";@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}'));
+            expect(testHelpers.clearCss(result.css)).to.eql(
+                testHelpers.clearCss(
+                    '@charset "UTF-8";@import url(test-0.css);@import url(test-1.css);@import url(test-2.css);d{}'
+                )
+            );
             expect(result.roots[0].css).to.eql('a{}');
             expect(result.roots[1].css).to.eql('b{}');
             expect(result.roots[2].css).to.eql('c{}');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 
@@ -497,7 +276,7 @@ describe(pkg.name, function () {
             expect(result.css).to.eql('b {color: white }\n');
             expect(result.roots[0].css).to.eql('a { color:red; }\n');
         }, {
-            to: testPath
+            to: testHelpers.testPath
         });
     });
 

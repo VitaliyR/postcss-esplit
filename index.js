@@ -1,11 +1,19 @@
-var postcss = require('postcss');
 var fs = require('fs');
 var path = require('path');
 var chalk = require('chalk');
 var mkdirp = require('mkdirp');
-var helpers = require('./lib/helpers');
-var pkg = require('./package.json');
 
+var postcss = require('postcss');
+var MapGenerator = require('postcss/lib/map-generator');
+var Result = require('postcss/lib/result');
+
+var pkg = require('./package.json');
+var helpers = require('./lib/helpers');
+
+/**
+ * Plugin default options
+ * @const
+ */
 var defaults = {
     maxSelectors: 4000,
     fileName: '%original%-%i%',
@@ -29,7 +37,7 @@ var messages;
  * @returns {Root}
  */
 var moveNodes = function (startNode, endNode, root) {
-    var newRoot = postcss.root(root.raws);
+    var newRoot = postcss.root({ raws: root.raws });
     var foundStart;
     var parentsRelations = [
         [root, newRoot]
@@ -194,46 +202,44 @@ var processRoot = function (processor, root, index, destination, result) {
         var filesForWrite = [];
         var fileName = helpers.getFileName(options.fileName, destination, index);
 
-        processor.process(root, {
-            from: result.opts.from,
-            to: fileName,
-            map: result.opts.map
-        }).then(
-            function (rootResult) {
+        var rootOpts = helpers.extend({}, result.opts, { to: fileName });
+        var rootResult = new Result(processor, root, rootOpts);
+        var rootData = new MapGenerator(postcss.stringify, root, result.opts).generate();
+        rootResult.css = rootData[0];
+        rootResult.map = rootData[1];
 
-                if (!rootResult.opts.to) {
-                    if (options.writeFiles) {
-                        result.warn(
-                            'Destination is not provided, ' +
-                            'splitted css files would not be written'
-                        );
-                    }
-
-                    return resolve(rootResult);
-                }
-
-                if (!options.writeFiles) return resolve(rootResult);
-
-                filesForWrite.push(
-                    writePromise(
-                        rootResult.opts.to, rootResult.css, true
-                    )
+        if (!rootResult.opts.to) {
+            if (options.writeFiles) {
+                result.warn(
+                    'Destination is not provided, ' +
+                    'splitted css files would not be written'
                 );
+            }
 
-                if (options.writeSourceMaps && rootResult.map) {
-                    filesForWrite.push(
-                        writePromise(
-                            rootResult.opts.to + '.map',
-                            rootResult.map.toString(),
-                            true
-                        )
-                    );
-                }
+            return resolve(rootResult);
+        }
 
-                Promise.all(filesForWrite).then(function () {
-                    resolve(rootResult);
-                }).catch(reject);
-            }).catch(reject);
+        if (!options.writeFiles) return resolve(rootResult);
+
+        filesForWrite.push(
+            writePromise(
+                rootResult.opts.to, rootResult.css, true
+            )
+        );
+
+        if (options.writeSourceMaps && rootResult.map) {
+            filesForWrite.push(
+                writePromise(
+                    rootResult.opts.to + '.map',
+                    rootResult.map.toString(),
+                    true
+                )
+            );
+        }
+
+        Promise.all(filesForWrite).then(function () {
+            resolve(rootResult);
+        }).catch(reject);
     });
 };
 
@@ -252,25 +258,18 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
     return function (css, result) {
         messages = [];
 
-        // preventing multiple instances in current processor
-        var pluginMatch;
+        // ensure plugin running in the end
+        if (result.processor.plugins[result.processor.plugins.length - 1] !== result.lastPlugin) {
+            // remove plugin duplicates
+            result.processor.plugins = result.processor.plugins.filter(function (plugin) {
+                return plugin.postcssPlugin === pkg.name ? plugin === result.lastPlugin : true;
+            });
 
-        result.processor.plugins = result.processor.plugins.filter(function (plugin) {
-            var splitPlugin = plugin.postcssPlugin === pkg.name;
+            // adding it to the end of the plugins array
+            result.processor.plugins.push(result.lastPlugin);
 
-            if (splitPlugin && !pluginMatch) {
-                pluginMatch = true;
-                return true;
-            }
-
-            return !splitPlugin;
-        });
-
-        // processing other roots only with processors which are not already processed source
-        var processor = postcss().use(result.processor);
-        processor.plugins = processor.plugins.slice(
-            processor.plugins.indexOf(result.lastPlugin) + 1
-        );
+            return false;
+        }
 
         roots = [];
         treeSelectors = selectors = 0;
@@ -288,7 +287,7 @@ module.exports = postcss.plugin(pkg.name, function (opts) {
 
         roots.forEach(function (root, index) {
             rootsProcessing.push(
-                processRoot(processor, root, index, destination, result)
+                processRoot(result.processor, root, index, destination, result)
             );
         }, this);
 
