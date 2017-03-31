@@ -17,6 +17,7 @@ var helpers = require('./lib/helpers');
 var defaults = {
     maxSelectors: 4000,
     fileName: '%original%-%i%',
+    fileNameStartIndex: 0,
     writeFiles: true,
     writeSourceMaps: true,
     writeImport: true,
@@ -200,7 +201,10 @@ var writePromise = function (dest, src, mkDir) {
 var processRoot = function (processor, root, index, destination, result) {
     return new Promise(function (resolve, reject) {
         var filesForWrite = [];
-        var fileName = helpers.getFileName(options.fileName, destination, index);
+        var fileNameStartIndex = Number(options.fileNameStartIndex);
+        fileNameStartIndex = isNaN(fileNameStartIndex) ? 0 : fileNameStartIndex;
+        var fileIndex = index + fileNameStartIndex;
+        var fileName = helpers.getFileName(options.fileName, destination, fileIndex);
 
         var rootOpts = helpers.extend({}, result.opts, { to: fileName });
         var rootResult = new Result(processor, root, rootOpts);

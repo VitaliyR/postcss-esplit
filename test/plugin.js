@@ -123,6 +123,33 @@ describe(pkg.name, function () {
         });
     });
 
+    it('Split file and write correct names, starting from 10 index', function (done) {
+        var source = 'q{} w{} e{}';
+
+        testOwnSuite(source,
+            { maxSelectors: 1, writeFiles: true, fileName: '%original%-%i%', fileNameStartIndex: 10 }, done,
+            function (result) {
+                expect(result.warnings()).to.be.empty;
+                expect(result.roots.length).to.eql(2);
+
+                var urlRegExp = /url\(|\)/gm;
+
+                var importNode = result.root.nodes[0].params.replace(urlRegExp, '');
+                var importNode2 = result.root.nodes[1].params.replace(urlRegExp, '');
+
+                expect(path.basename(result.roots[0].opts.to)).to.eql(importNode);
+                expect(path.basename(result.roots[1].opts.to)).to.eql(importNode2);
+
+                expect(result.roots[0].css).to.eql('q{}');
+                expect(result.roots[1].css).to.eql('w{}');
+
+                expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-10.css', 'utf-8')).to.eql('q{}');
+                expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-11.css', 'utf-8')).to.eql('w{}');
+            }, {
+                to: testHelpers.testPath
+            });
+    });
+
     it('Split file correctly with media queries', function (done) {
         test(
             'a{} @media (max-width: 0px) { a{} b{} } c {}',

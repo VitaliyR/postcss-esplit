@@ -1,3 +1,6 @@
+## [0.1.1] - 2017-03-31
+* Add *fileNameStartIndex* option
+
 ## [0.1.0] - 2016-05-18
 * Improved performance of processing children nodes
 

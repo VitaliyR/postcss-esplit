@@ -74,6 +74,7 @@ processor plugins list.
 * `fileName` *{string=%original%-%i%}* template for retrieving name of separated files
     * `%original%` *{string}* name of original file
     * `%i%` *{number}* index of separated file
+* `fileNameStartIndex` *{number=0}* separated files will receive generated name starting from this index
 * `writeFiles` *{boolean=true}* separated files should be written to the disk
 * `writeSourceMaps` *{boolean=true}* source maps of separated files should be written to the disk
 * `writeImport` *{boolean=true}* original css source should have import declaration for separated files
