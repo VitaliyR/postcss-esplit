@@ -20,6 +20,8 @@ var testOwnSuite = testHelpers.testOwnSuite;
 
 describe(pkg.name, function () {
 
+    testHelpers.clearTestDir();
+
     it('There are no splitted files even if writeFiles is true', function (done) {
         var source = 'a{}';
 
@@ -33,7 +35,6 @@ describe(pkg.name, function () {
     it('Not write files if writeFiles is false', function (done) {
         var source = 'a{}b{}c{}';
 
-        testHelpers.clearTestDir();
         testOwnSuite(source, { maxSelectors: 1, writeFiles: false }, done, function (result) {
             expect(result.warnings()).to.have.length(1);
             expect(result.roots).to.have.length(2);
@@ -92,6 +93,31 @@ describe(pkg.name, function () {
             expect(fs.readdirSync(testHelpers.testDir)).to.have.length(2);
             expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-0.css', 'utf-8')).to.eql('x{}');
             expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-1.css', 'utf-8')).to.eql('y{}');
+        }, {
+            to: testHelpers.testPath
+        });
+    });
+
+    it('Split file and write correct names', function (done) {
+        var source = 'a{} b{} c{}';
+
+        testOwnSuite(source, { maxSelectors: 1, writeFiles: true, fileName: '%original%-00%i%' }, done, function (result) {
+            expect(result.warnings()).to.be.empty;
+            expect(result.roots.length).to.eql(2);
+
+            var urlRegExp = /url\(|\)/gm;
+
+            var importNode = result.root.nodes[0].params.replace(urlRegExp, '');
+            var importNode2 = result.root.nodes[1].params.replace(urlRegExp, '');
+
+            expect(path.basename(result.roots[0].opts.to)).to.eql(importNode);
+            expect(path.basename(result.roots[1].opts.to)).to.eql(importNode2);
+
+            expect(result.roots[0].css).to.eql('a{}');
+            expect(result.roots[1].css).to.eql('b{}');
+
+            expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-000.css', 'utf-8')).to.eql('a{}');
+            expect(fs.readFileSync(testHelpers.testDir + path.sep + 'test-001.css', 'utf-8')).to.eql('b{}');
         }, {
             to: testHelpers.testPath
         });
