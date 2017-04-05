@@ -162,6 +162,30 @@ describe(pkg.name, function () {
         );
     });
 
+    it('Split file correctly with unbreakable at-rules', function (done) {
+        test(
+            'a{} @keyframes animation {0% {background:red;}100% {background:blue;} } b{}',
+            'b{}',
+            [
+                'a{} @keyframes animation {0% {background:red;}100% {background:blue;} }'
+            ],
+            { maxSelectors: 2, writeFiles: false, writeImport: false },
+            done
+        );
+    });
+
+    it('Split file correctly with multiple unbreakable at-rules', function (done) {
+        test(
+            'a{} @keyframes animation {0% {background:red;}100% {background:blue;}} b{} c{} @keyframes animation2 {100% {background:blue;}}',
+            'b{} c{} @keyframes animation2 {100% {background:blue;}}',
+            [
+                'a{} @keyframes animation {0% {background:red;}100% {background:blue;}}'
+            ],
+            { maxSelectors: 2, writeFiles: false, writeImport: false },
+            done
+        );
+    });
+
     it('Split file with empty media queries', function (done) {
         test(
             '@media (max-width: 0px) { a{} b{} }',

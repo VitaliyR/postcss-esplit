@@ -24,6 +24,12 @@ var defaults = {
     quiet: false
 };
 
+/**
+ * At-Rules, contents should not be separated between roots
+ * @type {Array.<String>}
+ */
+var unbreakableAtRules = ['keyframes'];
+
 var roots;
 var treeSelectors;
 var selectors;
@@ -93,6 +99,15 @@ var moveNodes = function (startNode, endNode, root) {
 };
 
 /**
+ * Checks if passed node is At-Rule and it exists in unbreakable at-rules list
+ * @param {Node} node
+ * @returns {boolean}
+ */
+var isUnbreakableAtRule = function (node) {
+    return node.type === 'atrule' && unbreakableAtRules.indexOf(node.name) !== -1;
+};
+
+/**
  * Splits rule selectors by provided position
  *
  * @param {Rule} node
@@ -122,7 +137,17 @@ var processTree = function (css) {
     var startingNode, endNode, prevNode;
 
     css.walk(function (node) {
+        if (isUnbreakableAtRule(node)) {
+            prevNode = node.last;
+            treeSelectors += 1;
+            selectors += 1;
+            return true;
+        }
+        if (isUnbreakableAtRule(node.parent)) {
+            return true;
+        }
         if (!node.selector) return true;
+
         !startingNode && (startingNode = node);
 
         if ((treeSelectors += node.selectors.length) > options.maxSelectors) {
@@ -177,7 +202,7 @@ var log = function (msg/* ...args */) {
  *
  * @param {string} [dest] destination path
  * @param {string} [src] contents of the file
- * @parm {boolean} [mkDir=false] recursive make dir to dest
+ * @param {boolean} [mkDir=false] recursive make dir to dest
  * @returns {Promise}
  */
 var writePromise = function (dest, src, mkDir) {

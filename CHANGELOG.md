@@ -1,3 +1,6 @@
+## [0.1.2] - 2017-03-31
+* [#5](https://github.com/VitaliyR/postcss-esplit/issues/5) Fix splitting non-breakable at-rules
+
 ## [0.1.1] - 2017-03-31
 * Add *fileNameStartIndex* option
 
